@@ -36,6 +36,12 @@ static NSUInteger videoDurationInSec = 240; // 4min+
 - (void)viewDidLoad {
     [super viewDidLoad];
     
+    faceView = [[UIView alloc] initWithFrame:CGRectMake(100.0, 100.0, 100.0, 100.0)];
+    faceView.layer.borderWidth = 1;
+    faceView.layer.borderColor = [[UIColor redColor] CGColor];
+    [self.view addSubview:faceView];
+    faceView.hidden = NO;
+    
     // create camera preview
     [self createCameraPreview];
     
@@ -214,6 +220,99 @@ static NSUInteger videoDurationInSec = 240; // 4min+
 -(void)dealloc
 {
     // Nooooooooo
+}
+
+#pragma mark -
+#pragma mark - Handle face detection
+
+- (void)GPUVCWillOutputFeatures:(NSArray*)featureArray forClap:(CGRect)clap
+                 andOrientation:(UIDeviceOrientation)curDeviceOrientation
+{
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSLog(@"Did receive array");
+        
+        CGRect previewBox = self.view.frame;
+        
+        if (featureArray == nil && faceView) {
+            [faceView removeFromSuperview];
+            faceView = nil;
+        }
+        
+        
+        for ( CIFaceFeature *faceFeature in featureArray) {
+            
+            [self logFacialFeatureCoordinates:faceFeature];
+            
+            // find the correct position for the square layer within the previewLayer
+            // the feature box originates in the bottom left of the video frame.
+            // (Bottom right if mirroring is turned on)
+            NSLog(@"%@", NSStringFromCGRect([faceFeature bounds]));
+            
+            //Update face bounds for iOS Coordinate System
+            CGRect faceRect = [faceFeature bounds];
+            
+            // flip preview width and height
+            CGFloat temp = faceRect.size.width;
+            faceRect.size.width = faceRect.size.height;
+            faceRect.size.height = temp;
+            temp = faceRect.origin.x;
+            faceRect.origin.x = faceRect.origin.y;
+            faceRect.origin.y = temp;
+            // scale coordinates so they fit in the preview box, which may be scaled
+            CGFloat widthScaleBy = previewBox.size.width / clap.size.height;
+            CGFloat heightScaleBy = previewBox.size.height / clap.size.width;
+            faceRect.size.width *= widthScaleBy;
+            faceRect.size.height *= heightScaleBy;
+            faceRect.origin.x *= widthScaleBy;
+            faceRect.origin.y *= heightScaleBy;
+            
+            faceRect = CGRectOffset(faceRect, previewBox.origin.x, previewBox.origin.y);
+            
+            if (faceView) {
+                [faceView removeFromSuperview];
+                faceView =  nil;
+            }
+            
+            // create a UIView using the bounds of the face
+            faceView = [[UIView alloc] initWithFrame:faceRect];
+            
+            // add a border around the newly created UIView
+            faceView.layer.borderWidth = 1;
+            faceView.layer.borderColor = [[UIColor redColor] CGColor];
+            
+            // add the new view to create a box around the face
+            [self.view addSubview:faceView];
+            
+            //            if (recording == TRUE) {
+            ////                [self startScreenCapture]
+            //                startScreenCapture(view);
+            //            }
+            
+        }
+    });
+    
+}
+
+- (void) logFacialFeatureCoordinates:(CIFaceFeature *) f
+{
+    NSLog(@"left eye found: %@", (f. hasLeftEyePosition ? @"YES" : @"NO"));
+    NSLog(@"right eye found: %@", (f. hasRightEyePosition ? @"YES" : @"NO"));
+    NSLog(@"mouth found: %@", (f. hasMouthPosition ? @"YES" : @"NO"));
+    
+    if(f.hasLeftEyePosition)
+    {
+        NSLog(@"left eye position x = %f , y = %f", f.leftEyePosition.x, f.leftEyePosition.y);
+    }
+    
+    if(f.hasRightEyePosition)
+    {
+        NSLog(@"right eye position x = %f , y = %f", f.rightEyePosition.x, f.rightEyePosition.y);
+    }
+    
+    if(f.hasMouthPosition)
+    {
+        NSLog(@"mouth position x = %f , y = %f", f.mouthPosition.x, f.mouthPosition.y);
+    }
 }
 
 @end
