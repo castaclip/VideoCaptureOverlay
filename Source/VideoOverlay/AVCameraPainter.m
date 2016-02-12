@@ -7,6 +7,7 @@
 //
 
 #import "AVCameraPainter.h"
+#define degreesToRadian(x)  (M_PI * (x) / 180.0)
 
 @interface AVCameraPainter () {
     CMTime startTime;
@@ -218,7 +219,10 @@
     }
     
     _writer.encodingLiveVideo = YES;
-    [_writer startRecording];
+    
+    CGAffineTransform orientationTransform = CGAffineTransformIdentity;
+    orientationTransform = CGAffineTransformMakeRotation(degreesToRadian(90));
+    [_writer startRecordingInOrientation:orientationTransform];
 }
 
 -(void) freeCameraCapture

@@ -85,7 +85,7 @@ static NSUInteger videoDurationInSec = 240; // 4min+
 {
     // create video painter
     painter = [[AVCameraPainter alloc] initWithSessionPreset:AVCaptureSessionPreset1280x720 cameraPosition:AVCaptureDevicePositionBack];
-    painter.shouldCaptureAudio = NO;
+    painter.shouldCaptureAudio = YES;
     painter.camera.outputImageOrientation = UIInterfaceOrientationMaskLandscapeRight;
     
     
