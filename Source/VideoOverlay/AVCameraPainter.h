@@ -10,8 +10,19 @@
 #import "AVFrameDrawer.h"
 #import "GPUImage.h"
 
-@interface AVCameraPainter : NSObject {
+@protocol AVCameraPainterDelegate <NSObject>
+- (void) GPUVCWillOutputFeatures:(NSArray*)featureArray forClap:(CGRect)clap
+                 andOrientation:(UIDeviceOrientation)curDeviceOrientation;
+@end
+
+@interface AVCameraPainter : NSObject <GPUImageVideoCameraDelegate>
+{
+    CIDetector *faceDetector;
+    BOOL faceThinking;
 }
+
+@property (nonatomic, weak) id delegate;
+@property(nonatomic,retain) CIDetector * faceDetector;
 
 @property (nonatomic, assign) BOOL shouldUseCaptureTime;
 @property (nonatomic, assign) BOOL shouldCaptureAudio;

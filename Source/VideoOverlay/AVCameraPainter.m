@@ -21,6 +21,8 @@
 @implementation AVCameraPainter  {
 }
 
+@synthesize faceDetector;
+
 #pragma mark -
 #pragma mark Initialization and teardown
 
@@ -44,6 +46,10 @@
         
         [self setComposer:[[GPUImageSourceOverBlendFilter alloc] init]];
         [self initCameraWithSessionPreset:sessionPreset position:cameraPosition];
+        
+        NSDictionary *detectorOptions = @{ CIDetectorAccuracy : CIDetectorAccuracyHigh, CIDetectorTracking : @TRUE};
+        self.faceDetector = [CIDetector detectorOfType:CIDetectorTypeFace context:nil options:detectorOptions];
+        faceThinking = NO;
     }
     return self;
 }
@@ -51,6 +57,7 @@
 -(void)initCameraWithSessionPreset:(NSString *)sessionPreset position:(AVCaptureDevicePosition)cameraPosition
 {
     _camera = [[GPUImageVideoCamera alloc] initWithSessionPreset:sessionPreset cameraPosition:cameraPosition];
+    _camera.delegate = self;
 
     NSAssert(_camera!=nil,@"Failed to create GPUImageVideoCamera instance");
     
@@ -288,5 +295,173 @@
     _overlay = nil;
     _composer = nil;
 }
+
+#pragma mark - Face Detection Delegate Callback
+- (void)willOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer{
+    if (!faceThinking) {
+        CFAllocatorRef allocator = CFAllocatorGetDefault();
+        CMSampleBufferRef sbufCopyOut;
+        CMSampleBufferCreateCopy(allocator,sampleBuffer,&sbufCopyOut);
+        [self performSelectorInBackground:@selector(grepFacesForSampleBuffer:) withObject:CFBridgingRelease(sbufCopyOut)];
+    }
+}
+
+- (void)grepFacesForSampleBuffer:(CMSampleBufferRef)sampleBuffer{
+    faceThinking = TRUE;
+    NSLog(@"Faces thinking");
+    CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
+    CFDictionaryRef attachments = CMCopyDictionaryOfAttachments(kCFAllocatorDefault, sampleBuffer, kCMAttachmentMode_ShouldPropagate);
+    CIImage *convertedImage = [[CIImage alloc] initWithCVPixelBuffer:pixelBuffer options:(__bridge NSDictionary *)attachments];
+    
+    if (attachments)
+        CFRelease(attachments);
+    NSDictionary *imageOptions = nil;
+    UIDeviceOrientation curDeviceOrientation = [[UIDevice currentDevice] orientation];
+    int exifOrientation;
+    
+    /* kCGImagePropertyOrientation values
+     The intended display orientation of the image. If present, this key is a CFNumber value with the same value as defined
+     by the TIFF and EXIF specifications -- see enumeration of integer constants.
+     The value specified where the origin (0,0) of the image is located. If not present, a value of 1 is assumed.
+     
+     used when calling featuresInImage: options: The value for this key is an integer NSNumber from 1..8 as found in kCGImagePropertyOrientation.
+     If present, the detection will be done based on that orientation but the coordinates in the returned features will still be based on those of the image. */
+    
+    enum {
+        PHOTOS_EXIF_0ROW_TOP_0COL_LEFT			= 1, //   1  =  0th row is at the top, and 0th column is on the left (THE DEFAULT).
+        PHOTOS_EXIF_0ROW_TOP_0COL_RIGHT			= 2, //   2  =  0th row is at the top, and 0th column is on the right.
+        PHOTOS_EXIF_0ROW_BOTTOM_0COL_RIGHT      = 3, //   3  =  0th row is at the bottom, and 0th column is on the right.
+        PHOTOS_EXIF_0ROW_BOTTOM_0COL_LEFT       = 4, //   4  =  0th row is at the bottom, and 0th column is on the left.
+        PHOTOS_EXIF_0ROW_LEFT_0COL_TOP          = 5, //   5  =  0th row is on the left, and 0th column is the top.
+        PHOTOS_EXIF_0ROW_RIGHT_0COL_TOP         = 6, //   6  =  0th row is on the right, and 0th column is the top.
+        PHOTOS_EXIF_0ROW_RIGHT_0COL_BOTTOM      = 7, //   7  =  0th row is on the right, and 0th column is the bottom.
+        PHOTOS_EXIF_0ROW_LEFT_0COL_BOTTOM       = 8  //   8  =  0th row is on the left, and 0th column is the bottom.
+    };
+    BOOL isUsingFrontFacingCamera = FALSE;
+    AVCaptureDevicePosition currentCameraPosition = [_camera cameraPosition];
+    
+    if (currentCameraPosition != AVCaptureDevicePositionBack)
+    {
+        isUsingFrontFacingCamera = TRUE;
+    }
+    
+    switch (curDeviceOrientation) {
+        case UIDeviceOrientationPortraitUpsideDown:  // Device oriented vertically, home button on the top
+            exifOrientation = PHOTOS_EXIF_0ROW_LEFT_0COL_BOTTOM;
+            break;
+        case UIDeviceOrientationLandscapeLeft:       // Device oriented horizontally, home button on the right
+            if (isUsingFrontFacingCamera)
+                exifOrientation = PHOTOS_EXIF_0ROW_BOTTOM_0COL_RIGHT;
+            else
+                exifOrientation = PHOTOS_EXIF_0ROW_TOP_0COL_LEFT;
+            break;
+        case UIDeviceOrientationLandscapeRight:      // Device oriented horizontally, home button on the left
+            if (isUsingFrontFacingCamera)
+                exifOrientation = PHOTOS_EXIF_0ROW_TOP_0COL_LEFT;
+            else
+                exifOrientation = PHOTOS_EXIF_0ROW_BOTTOM_0COL_RIGHT;
+            break;
+        case UIDeviceOrientationPortrait:            // Device oriented vertically, home button on the bottom
+        default:
+            exifOrientation = PHOTOS_EXIF_0ROW_RIGHT_0COL_TOP;
+            break;
+    }
+    
+    imageOptions = [NSDictionary dictionaryWithObject:[NSNumber numberWithInt:exifOrientation] forKey:CIDetectorImageOrientation];
+    
+    NSArray *features = [self.faceDetector featuresInImage:convertedImage options:imageOptions];
+    
+    NSLog(@"No. of faces detected %lu", (unsigned long)features.count);
+    //NSLog(@"No of faces %d", features.count);
+    
+    // get the clean aperture
+    // the clean aperture is a rectangle that defines the portion of the encoded pixel dimensions
+    // that represents image data valid for display.
+    CMFormatDescriptionRef fdesc = CMSampleBufferGetFormatDescription(sampleBuffer);
+    CGRect clap = CMVideoFormatDescriptionGetCleanAperture(fdesc, false /*originIsTopLeft == false*/);
+    
+    [self.delegate GPUVCWillOutputFeatures:features forClap:clap andOrientation:curDeviceOrientation];
+    faceThinking = FALSE;
+}
+
+//
+//- (void)grepFacesForSampleBuffer:(CMSampleBufferRef)sampleBuffer
+//{
+//    CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
+//    CFDictionaryRef attachments = CMCopyDictionaryOfAttachments(kCFAllocatorDefault, sampleBuffer, kCMAttachmentMode_ShouldPropagate);
+//    CIImage *convertedImage = [[CIImage alloc] initWithCVPixelBuffer:pixelBuffer options:(__bridge NSDictionary *)attachments];
+//
+//    if (attachments)
+//    {
+//        CFRelease(attachments);
+//    }
+//    
+//    NSDictionary *imageOptions = nil;
+//    UIDeviceOrientation curDeviceOrientation = [[UIDevice currentDevice] orientation];
+//    int exifOrientation;
+//
+//    /* kCGImagePropertyOrientation values
+//     The intended display orientation of the image. If present, this key is a CFNumber value with the same value as defined
+//     by the TIFF and EXIF specifications -- see enumeration of integer constants.
+//     The value specified where the origin (0,0) of the image is located. If not present, a value of 1 is assumed.
+//
+//     used when calling featuresInImage: options: The value for this key is an integer NSNumber from 1..8 as found in kCGImagePropertyOrientation.
+//     If present, the detection will be done based on that orientation but the coordinates in the returned features will still be based on those of the image. */
+//
+//    enum {
+//        PHOTOS_EXIF_0ROW_TOP_0COL_LEFT			= 1, //   1  =  0th row is at the top, and 0th column is on the left (THE DEFAULT).
+//        PHOTOS_EXIF_0ROW_TOP_0COL_RIGHT			= 2, //   2  =  0th row is at the top, and 0th column is on the right.
+//        PHOTOS_EXIF_0ROW_BOTTOM_0COL_RIGHT      = 3, //   3  =  0th row is at the bottom, and 0th column is on the right.
+//        PHOTOS_EXIF_0ROW_BOTTOM_0COL_LEFT       = 4, //   4  =  0th row is at the bottom, and 0th column is on the left.
+//        PHOTOS_EXIF_0ROW_LEFT_0COL_TOP          = 5, //   5  =  0th row is on the left, and 0th column is the top.
+//        PHOTOS_EXIF_0ROW_RIGHT_0COL_TOP         = 6, //   6  =  0th row is on the right, and 0th column is the top.
+//        PHOTOS_EXIF_0ROW_RIGHT_0COL_BOTTOM      = 7, //   7  =  0th row is on the right, and 0th column is the bottom.
+//        PHOTOS_EXIF_0ROW_LEFT_0COL_BOTTOM       = 8  //   8  =  0th row is on the left, and 0th column is the bottom.
+//    };
+//    BOOL isUsingFrontFacingCamera = FALSE;
+//    AVCaptureDevicePosition currentCameraPosition = [_camera cameraPosition];
+//
+//    if (currentCameraPosition != AVCaptureDevicePositionBack)
+//    {
+//        isUsingFrontFacingCamera = TRUE;
+//    }
+//
+//    switch (curDeviceOrientation) {
+//        case UIDeviceOrientationPortraitUpsideDown:  // Device oriented vertically, home button on the top
+//            exifOrientation = PHOTOS_EXIF_0ROW_LEFT_0COL_BOTTOM;
+//            break;
+//        case UIDeviceOrientationLandscapeLeft:       // Device oriented horizontally, home button on the right
+//            if (isUsingFrontFacingCamera)
+//                exifOrientation = PHOTOS_EXIF_0ROW_BOTTOM_0COL_RIGHT;
+//            else
+//                exifOrientation = PHOTOS_EXIF_0ROW_TOP_0COL_LEFT;
+//            break;
+//        case UIDeviceOrientationLandscapeRight:      // Device oriented horizontally, home button on the left
+//            if (isUsingFrontFacingCamera)
+//                exifOrientation = PHOTOS_EXIF_0ROW_TOP_0COL_LEFT;
+//            else
+//                exifOrientation = PHOTOS_EXIF_0ROW_BOTTOM_0COL_RIGHT;
+//            break;
+//        case UIDeviceOrientationPortrait:            // Device oriented vertically, home button on the bottom
+//        default:
+//            exifOrientation = PHOTOS_EXIF_0ROW_RIGHT_0COL_TOP;
+//            break;
+//    }
+//
+//    imageOptions = [NSDictionary dictionaryWithObject:[NSNumber numberWithInt:exifOrientation] forKey:CIDetectorImageOrientation];
+//
+//    //NSLog(@"Face Detector %@", [self.faceDetector description]);
+//    NSArray *features = [self.faceDetector featuresInImage:convertedImage options:imageOptions];
+//    
+//    NSLog(@"No. of faces detected %d", features.count);
+//
+//        // get the clean aperture
+//        // the clean aperture is a rectangle that defines the portion of the encoded pixel dimensions
+//        // that represents image data valid for display.
+//        CMFormatDescriptionRef fdesc = CMSampleBufferGetFormatDescription(sampleBuffer);
+//        CGRect clap = CMVideoFormatDescriptionGetCleanAperture(fdesc, false /*originIsTopLeft == false*/);
+//        [self.delegate GPUVCWillOutputFeatures:features forClap:clap andOrientation:curDeviceOrientation];
+//
+//}
 
 @end

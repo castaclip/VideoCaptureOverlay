@@ -84,27 +84,27 @@ static NSUInteger videoDurationInSec = 240; // 4min+
 -(void) initCameraCapture
 {
     // create video painter
-    painter = [[AVCameraPainter alloc] initWithSessionPreset:AVCaptureSessionPreset1280x720 cameraPosition:AVCaptureDevicePositionBack];
+    painter = [[AVCameraPainter alloc] initWithSessionPreset:AVCaptureSessionPreset1280x720 cameraPosition:AVCaptureDevicePositionFront];
     painter.shouldCaptureAudio = YES;
     painter.camera.outputImageOrientation = UIInterfaceOrientationMaskLandscapeRight;
     
     
     // context initialization - block (we dont want to overload class in this example)
     void (^contextInitialization)(CGContextRef context, CGSize size) = ^(CGContextRef context, CGSize size) {
-        CGContextClearRect(context, CGRectMake(0, 0, size.width, size.height));
+        //CGContextClearRect(context, CGRectMake(0, 0, size.width, size.height));
         
-        CGContextSetRGBFillColor(context, 0.0, 1.0, 0.0, 0.5);
-        CGContextFillRect(context, CGRectMake(0, 0, size.width*0.3, size.height*0.8));
-        
-        CGContextSetRGBFillColor(context, 1.0, 1.0, 1.0, 0.7);
-        CGContextFillEllipseInRect(context, CGRectMake(0, 0, size.width*0.5, size.height*0.4));
-        
-        NSString *fontName = @"Courier-Bold";
-        CGContextSelectFont(context, [fontName UTF8String], 18, kCGEncodingMacRoman);
-        
-        CGContextSetRGBFillColor(context, 1, 0, 0, 1);
-        NSString *s = @"Just running this ...";
-        CGContextShowTextAtPoint(context, 10, 10, [s UTF8String], s.length);
+//        CGContextSetRGBFillColor(context, 0.0, 1.0, 0.0, 0.5);
+//        CGContextFillRect(context, CGRectMake(0, 0, size.width*0.3, size.height*0.8));
+//        
+//        CGContextSetRGBFillColor(context, 1.0, 1.0, 1.0, 0.7);
+//        CGContextFillEllipseInRect(context, CGRectMake(0, 0, size.width*0.5, size.height*0.4));
+//        
+//        NSString *fontName = @"Courier-Bold";
+//        CGContextSelectFont(context, [fontName UTF8String], 18, kCGEncodingMacRoman);
+//        
+//        CGContextSetRGBFillColor(context, 1, 0, 0, 1);
+//        NSString *s = @"Just running this ...";
+//        CGContextShowTextAtPoint(context, 10, 10, [s UTF8String], s.length);
     };
     
     // create overlay + some code
@@ -112,8 +112,9 @@ static NSUInteger videoDurationInSec = 240; // 4min+
                                contextInitailizeBlock:contextInitialization];
     
     frameDrawer.contextUpdateBlock = ^BOOL(CGContextRef context, CGSize size, CMTime time) {
-        CGContextSetRGBFillColor(context, 1, 1, 1, 1);
+        //CGContextSetRGBFillColor(context, 1, 1, 1, 1);
         //    s = [s stringByAppendingString:@"-"];
+        /*
         NSString *chars = @"-\\|/";
         CGFloat secondsf = (CGFloat)time.value / (CGFloat)time.timescale;
         NSUInteger seconds = (int)roundf(secondsf);
@@ -129,6 +130,8 @@ static NSUInteger videoDurationInSec = 240; // 4min+
         
         CGContextSetRGBFillColor(context, 1, 1, 1, 1);
         CGContextShowTextAtPoint(context, 100, 100, [s UTF8String], s.length);
+        
+        */
         
         return YES;
     };
