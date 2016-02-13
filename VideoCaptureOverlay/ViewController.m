@@ -12,12 +12,17 @@
 #import "AVFrameDrawer.h"
 #import "AVCameraPainter.h"
 
-@interface ViewController () {
+@interface ViewController () <AVCameraPainterDelegate> {
     GPUImageView *cameraPreview;
     AVCameraPainter *painter;
     AVFrameDrawer *frameDrawer;
     
     NSURL *outUrl;
+    
+    CGRect currentFaceRect;
+    CGRect priorCenter;
+    UIImage *image;
+    UIImage * sticker;
 }
 
 @property (nonatomic, weak) IBOutlet UIButton *recordButton;
@@ -41,6 +46,10 @@ static NSUInteger videoDurationInSec = 240; // 4min+
     faceView.layer.borderColor = [[UIColor redColor] CGColor];
     [self.view addSubview:faceView];
     faceView.hidden = NO;
+    
+    sticker = [UIImage imageNamed:@"sprite_cool_01.png"];
+    image = [UIImage imageWithCGImage:sticker.CGImage scale:1.0 orientation:UIImageOrientationLeft];
+    priorCenter = CGRectZero;
     
     // create camera preview
     [self createCameraPreview];
@@ -93,6 +102,7 @@ static NSUInteger videoDurationInSec = 240; // 4min+
     painter = [[AVCameraPainter alloc] initWithSessionPreset:AVCaptureSessionPreset1280x720 cameraPosition:AVCaptureDevicePositionFront];
     painter.shouldCaptureAudio = YES;
     painter.camera.outputImageOrientation = UIInterfaceOrientationMaskLandscapeRight;
+    painter.delegate = self;
     
     
     // context initialization - block (we dont want to overload class in this example)
@@ -118,27 +128,17 @@ static NSUInteger videoDurationInSec = 240; // 4min+
                                contextInitailizeBlock:contextInitialization];
     
     frameDrawer.contextUpdateBlock = ^BOOL(CGContextRef context, CGSize size, CMTime time) {
-        //CGContextSetRGBFillColor(context, 1, 1, 1, 1);
-        //    s = [s stringByAppendingString:@"-"];
-        /*
-        NSString *chars = @"-\\|/";
-        CGFloat secondsf = (CGFloat)time.value / (CGFloat)time.timescale;
-        NSUInteger seconds = (int)roundf(secondsf);
-        NSUInteger loc = (int)roundf(secondsf * 10) % (int)chars.length;
-        NSString *s = [chars substringWithRange:NSMakeRange(loc,1)];
+        CGContextClearRect(context, CGRectMake(0, 0, size.width, size.height));
+
+        float imageSize = MIN(currentFaceRect.size.width, currentFaceRect.size.height);
+        UIGraphicsBeginImageContext(image.size);
+        UIGraphicsPushContext(context);
         
-        CGContextClearRect(context, CGRectMake(90, 90, 120, 40));
-        CGContextClearRect(context, CGRectMake(90, 90, 120, 40));
-        CGContextSetRGBFillColor(context, 0, 0, 0, 0.8);
-        CGContextFillRect(context, CGRectMake(90, 90, 120, 40));
+        [image drawInRect:CGRectMake(currentFaceRect.origin.x, currentFaceRect.origin.y, imageSize, imageSize)];
         
-        s = [NSString stringWithFormat:@"%@ - %02d:%02d",s,(int)(seconds / 60),(int)(seconds % 60)];
-        
-        CGContextSetRGBFillColor(context, 1, 1, 1, 1);
-        CGContextShowTextAtPoint(context, 100, 100, [s UTF8String], s.length);
-        
-        */
-        
+        UIGraphicsPopContext();
+        UIGraphicsEndImageContext();
+
         return YES;
     };
     
@@ -228,67 +228,91 @@ static NSUInteger videoDurationInSec = 240; // 4min+
 - (void)GPUVCWillOutputFeatures:(NSArray*)featureArray forClap:(CGRect)clap
                  andOrientation:(UIDeviceOrientation)curDeviceOrientation
 {
+    NSLog(@"Did receive array");
+
     dispatch_async(dispatch_get_main_queue(), ^{
         NSLog(@"Did receive array");
         
-        CGRect previewBox = self.view.frame;
-        
-        if (featureArray == nil && faceView) {
-            [faceView removeFromSuperview];
-            faceView = nil;
-        }
-        
-        
-        for ( CIFaceFeature *faceFeature in featureArray) {
-            
-            [self logFacialFeatureCoordinates:faceFeature];
-            
-            // find the correct position for the square layer within the previewLayer
-            // the feature box originates in the bottom left of the video frame.
-            // (Bottom right if mirroring is turned on)
-            NSLog(@"%@", NSStringFromCGRect([faceFeature bounds]));
-            
-            //Update face bounds for iOS Coordinate System
-            CGRect faceRect = [faceFeature bounds];
-            
-            // flip preview width and height
-            CGFloat temp = faceRect.size.width;
-            faceRect.size.width = faceRect.size.height;
-            faceRect.size.height = temp;
-            temp = faceRect.origin.x;
-            faceRect.origin.x = faceRect.origin.y;
-            faceRect.origin.y = temp;
-            // scale coordinates so they fit in the preview box, which may be scaled
-            CGFloat widthScaleBy = previewBox.size.width / clap.size.height;
-            CGFloat heightScaleBy = previewBox.size.height / clap.size.width;
-            faceRect.size.width *= widthScaleBy;
-            faceRect.size.height *= heightScaleBy;
-            faceRect.origin.x *= widthScaleBy;
-            faceRect.origin.y *= heightScaleBy;
-            
-            faceRect = CGRectOffset(faceRect, previewBox.origin.x, previewBox.origin.y);
-            
-            if (faceView) {
-                [faceView removeFromSuperview];
-                faceView =  nil;
+        if ([featureArray count] > 0) {
+            CIFaceFeature *faceFeature = featureArray[0];
+            if (faceFeature.hasRightEyePosition && faceFeature.hasLeftEyePosition) {
+                currentFaceRect = [faceFeature bounds];
+                
+                if(priorCenter.origin.x == 0) {
+                    priorCenter = currentFaceRect;
+                    return;
+                }
+                
+                if (ABS(currentFaceRect.origin.x - priorCenter.origin.x) < 7 &&
+                    ABS(currentFaceRect.origin.y - priorCenter.origin.y) < 7)
+                {
+                    currentFaceRect = priorCenter;
+                }
+                
+                currentFaceRect.origin.x = (currentFaceRect.origin.x + 2*priorCenter.origin.x) / 3;
+                currentFaceRect.origin.y = (currentFaceRect.origin.y + 2*priorCenter.origin.y) / 3;
+                priorCenter = currentFaceRect;
             }
-            
-            // create a UIView using the bounds of the face
-            faceView = [[UIView alloc] initWithFrame:faceRect];
-            
-            // add a border around the newly created UIView
-            faceView.layer.borderWidth = 1;
-            faceView.layer.borderColor = [[UIColor redColor] CGColor];
-            
-            // add the new view to create a box around the face
-            [self.view addSubview:faceView];
-            
-            //            if (recording == TRUE) {
-            ////                [self startScreenCapture]
-            //                startScreenCapture(view);
-            //            }
-            
         }
+        
+//        CGRect previewBox = self.view.frame;
+//        
+//        if (featureArray == nil && faceView) {
+//            [faceView removeFromSuperview];
+//            faceView = nil;
+//        }
+//        
+//        
+//        for ( CIFaceFeature *faceFeature in featureArray) {
+//            
+//            [self logFacialFeatureCoordinates:faceFeature];
+//            
+//            // find the correct position for the square layer within the previewLayer
+//            // the feature box originates in the bottom left of the video frame.
+//            // (Bottom right if mirroring is turned on)
+//            NSLog(@"%@", NSStringFromCGRect([faceFeature bounds]));
+//            
+//            //Update face bounds for iOS Coordinate System
+//            CGRect faceRect = [faceFeature bounds];
+//            
+//            // flip preview width and height
+//            CGFloat temp = faceRect.size.width;
+//            faceRect.size.width = faceRect.size.height;
+//            faceRect.size.height = temp;
+//            temp = faceRect.origin.x;
+//            faceRect.origin.x = faceRect.origin.y;
+//            faceRect.origin.y = temp;
+//            // scale coordinates so they fit in the preview box, which may be scaled
+//            CGFloat widthScaleBy = previewBox.size.width / clap.size.height;
+//            CGFloat heightScaleBy = previewBox.size.height / clap.size.width;
+//            faceRect.size.width *= widthScaleBy;
+//            faceRect.size.height *= heightScaleBy;
+//            faceRect.origin.x *= widthScaleBy;
+//            faceRect.origin.y *= heightScaleBy;
+//            
+//            faceRect = CGRectOffset(faceRect, previewBox.origin.x, previewBox.origin.y);
+//            
+//            if (faceView) {
+//                [faceView removeFromSuperview];
+//                faceView =  nil;
+//            }
+//            
+//            // create a UIView using the bounds of the face
+//            faceView = [[UIView alloc] initWithFrame:faceRect];
+//            
+//            // add a border around the newly created UIView
+//            faceView.layer.borderWidth = 1;
+//            faceView.layer.borderColor = [[UIColor redColor] CGColor];
+//            
+//            // add the new view to create a box around the face
+//            [self.view addSubview:faceView];
+//            
+//            //            if (recording == TRUE) {
+//            ////                [self startScreenCapture]
+//            //                startScreenCapture(view);
+//            //            }
+        
+        //}
     });
     
 }

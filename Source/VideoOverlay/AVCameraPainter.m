@@ -370,7 +370,7 @@
     
     NSArray *features = [self.faceDetector featuresInImage:convertedImage options:imageOptions];
     
-    NSLog(@"No. of faces detected %lu", (unsigned long)features.count);
+    //NSLog(@"No. of faces detected %lu", (unsigned long)features.count);
     //NSLog(@"No of faces %d", features.count);
     
     // get the clean aperture
