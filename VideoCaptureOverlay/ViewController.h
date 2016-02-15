@@ -10,7 +10,6 @@
 
 @interface ViewController : UIViewController
 {
-    UIView *faceView;
 }
 
 

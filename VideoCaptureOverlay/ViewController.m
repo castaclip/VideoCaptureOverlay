@@ -19,8 +19,8 @@
     
     NSURL *outUrl;
     
-    CGRect currentFaceRect;
-    CGRect priorCenter;
+    CGRect center;
+    
     UIImage *image;
     UIImage * sticker;
 }
@@ -32,8 +32,8 @@
 @implementation ViewController
 
 // hd - like a boss
-static CGFloat targetWidth = 1280.0;
-static CGFloat targetHeight = 720.0;
+static CGFloat targetWidth = 960.0;
+static CGFloat targetHeight = 540.0;
 
 static NSUInteger videoDurationInSec = 240; // 4min+
 
@@ -41,15 +41,10 @@ static NSUInteger videoDurationInSec = 240; // 4min+
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    faceView = [[UIView alloc] initWithFrame:CGRectMake(100.0, 100.0, 100.0, 100.0)];
-    faceView.layer.borderWidth = 1;
-    faceView.layer.borderColor = [[UIColor redColor] CGColor];
-    [self.view addSubview:faceView];
-    faceView.hidden = NO;
-    
     sticker = [UIImage imageNamed:@"sprite_cool_01.png"];
     image = [UIImage imageWithCGImage:sticker.CGImage scale:1.0 orientation:UIImageOrientationLeft];
-    priorCenter = CGRectZero;
+    
+    center = CGRectZero;
     
     // create camera preview
     [self createCameraPreview];
@@ -99,34 +94,14 @@ static NSUInteger videoDurationInSec = 240; // 4min+
 -(void) initCameraCapture
 {
     // create video painter
-    painter = [[AVCameraPainter alloc] initWithSessionPreset:AVCaptureSessionPreset1280x720 cameraPosition:AVCaptureDevicePositionFront];
+    painter = [[AVCameraPainter alloc] initWithSessionPreset:AVCaptureSessionPresetiFrame960x540 cameraPosition:AVCaptureDevicePositionFront];
     painter.shouldCaptureAudio = YES;
     painter.camera.outputImageOrientation = UIInterfaceOrientationMaskLandscapeRight;
     painter.delegate = self;
     
-//    if (painter.camera.cameraPosition == AVCaptureDevicePositionFront)
-//    {
-//        //[cameraPreview setInputRotation:kGPUImageNoRotation atIndex:0];
-//        [cameraPreview setInputRotation:kGPUImageFlipHorizonal atIndex:0];
-//    }
-    
-    
     // context initialization - block (we dont want to overload class in this example)
     void (^contextInitialization)(CGContextRef context, CGSize size) = ^(CGContextRef context, CGSize size) {
-        //CGContextClearRect(context, CGRectMake(0, 0, size.width, size.height));
-        
-//        CGContextSetRGBFillColor(context, 0.0, 1.0, 0.0, 0.5);
-//        CGContextFillRect(context, CGRectMake(0, 0, size.width*0.3, size.height*0.8));
-//        
-//        CGContextSetRGBFillColor(context, 1.0, 1.0, 1.0, 0.7);
-//        CGContextFillEllipseInRect(context, CGRectMake(0, 0, size.width*0.5, size.height*0.4));
-//        
-//        NSString *fontName = @"Courier-Bold";
-//        CGContextSelectFont(context, [fontName UTF8String], 18, kCGEncodingMacRoman);
-//        
-//        CGContextSetRGBFillColor(context, 1, 0, 0, 1);
-//        NSString *s = @"Just running this ...";
-//        CGContextShowTextAtPoint(context, 10, 10, [s UTF8String], s.length);
+      
     };
     
     // create overlay + some code
@@ -136,11 +111,12 @@ static NSUInteger videoDurationInSec = 240; // 4min+
     frameDrawer.contextUpdateBlock = ^BOOL(CGContextRef context, CGSize size, CMTime time) {
         CGContextClearRect(context, CGRectMake(0, 0, size.width, size.height));
 
-        float imageSize = MIN(currentFaceRect.size.width, currentFaceRect.size.height);
+        float imageSize = MIN(center.size.width, center.size.height);
+                
         UIGraphicsBeginImageContext(image.size);
         UIGraphicsPushContext(context);
         
-        [image drawInRect:CGRectMake(currentFaceRect.origin.x, currentFaceRect.origin.y, imageSize, imageSize)];
+        [image drawInRect:CGRectMake(center.origin.x, center.origin.y, imageSize, imageSize)];
         
         UIGraphicsPopContext();
         UIGraphicsEndImageContext();
@@ -148,11 +124,8 @@ static NSUInteger videoDurationInSec = 240; // 4min+
         return YES;
     };
     
-    // setup composer, preview and painter all together
     [painter.composer addTarget:cameraPreview];
-    
     [painter setOverlay:frameDrawer];
-    
     [painter startCameraCapture];
 }
 
@@ -234,93 +207,35 @@ static NSUInteger videoDurationInSec = 240; // 4min+
 - (void)GPUVCWillOutputFeatures:(NSArray*)featureArray forClap:(CGRect)clap
                  andOrientation:(UIDeviceOrientation)curDeviceOrientation
 {
-    NSLog(@"Did receive array");
-
     dispatch_async(dispatch_get_main_queue(), ^{
-        NSLog(@"Did receive array");
         
         if ([featureArray count] > 0) {
+            
             CIFaceFeature *faceFeature = featureArray[0];
-            if (faceFeature.hasRightEyePosition && faceFeature.hasLeftEyePosition) {
-                currentFaceRect = [faceFeature bounds];
+            CGRect rect = [faceFeature bounds];
+            
+            if (faceFeature.hasLeftEyePosition && faceFeature.hasRightEyePosition) {
                 
-                if(priorCenter.origin.x == 0) {
-                    priorCenter = currentFaceRect;
-                    return;
+                rect.origin.x = (faceFeature.leftEyePosition.x + faceFeature.rightEyePosition.x) / 2;
+                rect.origin.y = (faceFeature.leftEyePosition.y + faceFeature.rightEyePosition.y) / 2;
+                
+                rect.origin.x  = ABS(rect.origin.x - rect.size.width/2);
+                rect.origin.y  = ABS(rect.origin.y - rect.size.height/2);
+                
+                
+                if(ABS(rect.origin.x - center.origin.x) < 7 &&
+                   ABS(rect.origin.y - center.origin.y) < 7){
+                    rect = center;
                 }
                 
-                if (ABS(currentFaceRect.origin.x - priorCenter.origin.x) < 7 &&
-                    ABS(currentFaceRect.origin.y - priorCenter.origin.y) < 7)
-                {
-                    currentFaceRect = priorCenter;
-                }
+                // Smooth new center compared to old center
+                rect.origin.x = (rect.origin.x + 2*center.origin.x) / 3;
+                rect.origin.y = (rect.origin.y + 2*center.origin.y) / 3;
                 
-                currentFaceRect.origin.x = (currentFaceRect.origin.x + 2*priorCenter.origin.x) / 3;
-                currentFaceRect.origin.y = (currentFaceRect.origin.y + 2*priorCenter.origin.y) / 3;
-                priorCenter = currentFaceRect;
+                center = rect;
             }
         }
-        
-//        CGRect previewBox = self.view.frame;
-//        
-//        if (featureArray == nil && faceView) {
-//            [faceView removeFromSuperview];
-//            faceView = nil;
-//        }
-//        
-//        
-//        for ( CIFaceFeature *faceFeature in featureArray) {
-//            
-//            [self logFacialFeatureCoordinates:faceFeature];
-//            
-//            // find the correct position for the square layer within the previewLayer
-//            // the feature box originates in the bottom left of the video frame.
-//            // (Bottom right if mirroring is turned on)
-//            NSLog(@"%@", NSStringFromCGRect([faceFeature bounds]));
-//            
-//            //Update face bounds for iOS Coordinate System
-//            CGRect faceRect = [faceFeature bounds];
-//            
-//            // flip preview width and height
-//            CGFloat temp = faceRect.size.width;
-//            faceRect.size.width = faceRect.size.height;
-//            faceRect.size.height = temp;
-//            temp = faceRect.origin.x;
-//            faceRect.origin.x = faceRect.origin.y;
-//            faceRect.origin.y = temp;
-//            // scale coordinates so they fit in the preview box, which may be scaled
-//            CGFloat widthScaleBy = previewBox.size.width / clap.size.height;
-//            CGFloat heightScaleBy = previewBox.size.height / clap.size.width;
-//            faceRect.size.width *= widthScaleBy;
-//            faceRect.size.height *= heightScaleBy;
-//            faceRect.origin.x *= widthScaleBy;
-//            faceRect.origin.y *= heightScaleBy;
-//            
-//            faceRect = CGRectOffset(faceRect, previewBox.origin.x, previewBox.origin.y);
-//            
-//            if (faceView) {
-//                [faceView removeFromSuperview];
-//                faceView =  nil;
-//            }
-//            
-//            // create a UIView using the bounds of the face
-//            faceView = [[UIView alloc] initWithFrame:faceRect];
-//            
-//            // add a border around the newly created UIView
-//            faceView.layer.borderWidth = 1;
-//            faceView.layer.borderColor = [[UIColor redColor] CGColor];
-//            
-//            // add the new view to create a box around the face
-//            [self.view addSubview:faceView];
-//            
-//            //            if (recording == TRUE) {
-//            ////                [self startScreenCapture]
-//            //                startScreenCapture(view);
-//            //            }
-        
-        //}
     });
-    
 }
 
 - (void) logFacialFeatureCoordinates:(CIFaceFeature *) f

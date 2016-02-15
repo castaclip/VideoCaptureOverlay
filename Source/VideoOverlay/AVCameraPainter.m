@@ -47,7 +47,7 @@
         [self setComposer:[[GPUImageSourceOverBlendFilter alloc] init]];
         [self initCameraWithSessionPreset:sessionPreset position:cameraPosition];
         
-        NSDictionary *detectorOptions = @{ CIDetectorAccuracy : CIDetectorAccuracyHigh, CIDetectorTracking : @TRUE};
+        NSDictionary *detectorOptions = @{ CIDetectorAccuracy : CIDetectorAccuracyLow, CIDetectorTracking : @TRUE};
         self.faceDetector = [CIDetector detectorOfType:CIDetectorTypeFace context:nil options:detectorOptions];
         faceThinking = NO;
     }
@@ -60,7 +60,7 @@
 
     NSAssert(_camera!=nil,@"Failed to create GPUImageVideoCamera instance");
     
-    _camera.horizontallyMirrorFrontFacingCamera = YES;
+    _camera.horizontallyMirrorFrontFacingCamera = NO;
     _camera.horizontallyMirrorRearFacingCamera = NO;
     _camera.delegate = self;
 }
@@ -313,7 +313,10 @@
     CIImage *convertedImage = [[CIImage alloc] initWithCVPixelBuffer:pixelBuffer options:(__bridge NSDictionary *)attachments];
     
     if (attachments)
+    {
         CFRelease(attachments);
+    }
+    
     NSDictionary *imageOptions = nil;
     UIDeviceOrientation curDeviceOrientation = [[UIDevice currentDevice] orientation];
     int exifOrientation;
