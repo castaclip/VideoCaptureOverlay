@@ -57,12 +57,12 @@
 -(void)initCameraWithSessionPreset:(NSString *)sessionPreset position:(AVCaptureDevicePosition)cameraPosition
 {
     _camera = [[GPUImageVideoCamera alloc] initWithSessionPreset:sessionPreset cameraPosition:cameraPosition];
-    _camera.delegate = self;
 
     NSAssert(_camera!=nil,@"Failed to create GPUImageVideoCamera instance");
     
-    _camera.horizontallyMirrorFrontFacingCamera = NO;
+    _camera.horizontallyMirrorFrontFacingCamera = YES;
     _camera.horizontallyMirrorRearFacingCamera = NO;
+    _camera.delegate = self;
 }
 
 #pragma mark -

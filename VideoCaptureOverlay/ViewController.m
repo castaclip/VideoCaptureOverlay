@@ -104,6 +104,12 @@ static NSUInteger videoDurationInSec = 240; // 4min+
     painter.camera.outputImageOrientation = UIInterfaceOrientationMaskLandscapeRight;
     painter.delegate = self;
     
+//    if (painter.camera.cameraPosition == AVCaptureDevicePositionFront)
+//    {
+//        //[cameraPreview setInputRotation:kGPUImageNoRotation atIndex:0];
+//        [cameraPreview setInputRotation:kGPUImageFlipHorizonal atIndex:0];
+//    }
+    
     
     // context initialization - block (we dont want to overload class in this example)
     void (^contextInitialization)(CGContextRef context, CGSize size) = ^(CGContextRef context, CGSize size) {
