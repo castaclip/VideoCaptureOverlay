@@ -34,6 +34,7 @@
 // hd - like a boss
 static CGFloat targetWidth = 960.0;
 static CGFloat targetHeight = 540.0;
+static CGFloat ACCURACY = 0.95;
 
 static NSUInteger videoDurationInSec = 240; // 4min+
 
@@ -107,16 +108,16 @@ static NSUInteger videoDurationInSec = 240; // 4min+
     // create overlay + some code
     frameDrawer = [[AVFrameDrawer alloc] initWithSize:CGSizeMake(targetWidth, targetHeight)
                                contextInitailizeBlock:contextInitialization];
-    
+        
     frameDrawer.contextUpdateBlock = ^BOOL(CGContextRef context, CGSize size, CMTime time) {
+        
         CGContextClearRect(context, CGRectMake(0, 0, size.width, size.height));
-
         float imageSize = MIN(center.size.width, center.size.height);
                 
         UIGraphicsBeginImageContext(image.size);
         UIGraphicsPushContext(context);
         
-        [image drawInRect:CGRectMake(center.origin.x, center.origin.y, imageSize, imageSize)];
+        [image drawInRect:CGRectMake(center.origin.x + 150, center.origin.y, imageSize, imageSize)];
         
         UIGraphicsPopContext();
         UIGraphicsEndImageContext();
@@ -222,20 +223,28 @@ static NSUInteger videoDurationInSec = 240; // 4min+
                 rect.origin.x  = ABS(rect.origin.x - rect.size.width/2);
                 rect.origin.y  = ABS(rect.origin.y - rect.size.height/2);
                 
+                CGFloat percentage = [self getOverlappingPercentage:rect :center];
+                NSLog(@"Percentage Overlay : %f", percentage);
                 
-                if(ABS(rect.origin.x - center.origin.x) < 7 &&
-                   ABS(rect.origin.y - center.origin.y) < 7){
+                if (percentage >= ACCURACY)
+                {
                     rect = center;
                 }
                 
                 // Smooth new center compared to old center
-                rect.origin.x = (rect.origin.x + 2*center.origin.x) / 3;
-                rect.origin.y = (rect.origin.y + 2*center.origin.y) / 3;
+                //rect.origin.x = (rect.origin.x + 2 * center.origin.x) / 3;
+                //rect.origin.y = (rect.origin.y + 2 * center.origin.y) / 3;
                 
                 center = rect;
             }
         }
     });
+}
+
+-(CGFloat) getOverlappingPercentage:(CGRect)r1 :(CGRect)r2
+{
+    CGRect interRect = CGRectIntersection(r1, r2);
+    return (interRect.size.width * interRect.size.height) / (((r1.size.width * r1.size.height) + (r2.size.width * r2.size.height))/2.0);
 }
 
 - (void) logFacialFeatureCoordinates:(CIFaceFeature *) f
