@@ -34,7 +34,7 @@
 // hd - like a boss
 static CGFloat targetWidth = 960.0;
 static CGFloat targetHeight = 540.0;
-static CGFloat ACCURACY = 0.95;
+static CGFloat ACCURACY = 0.94;
 
 static NSUInteger videoDurationInSec = 240; // 4min+
 
@@ -108,7 +108,7 @@ static NSUInteger videoDurationInSec = 240; // 4min+
     // create overlay + some code
     frameDrawer = [[AVFrameDrawer alloc] initWithSize:CGSizeMake(targetWidth, targetHeight)
                                contextInitailizeBlock:contextInitialization];
-        
+    
     frameDrawer.contextUpdateBlock = ^BOOL(CGContextRef context, CGSize size, CMTime time) {
         
         CGContextClearRect(context, CGRectMake(0, 0, size.width, size.height));
@@ -215,30 +215,66 @@ static NSUInteger videoDurationInSec = 240; // 4min+
             CIFaceFeature *faceFeature = featureArray[0];
             CGRect rect = [faceFeature bounds];
             
-            if (faceFeature.hasLeftEyePosition && faceFeature.hasRightEyePosition) {
-                
-                rect.origin.x = (faceFeature.leftEyePosition.x + faceFeature.rightEyePosition.x) / 2;
-                rect.origin.y = (faceFeature.leftEyePosition.y + faceFeature.rightEyePosition.y) / 2;
-                
-                rect.origin.x  = ABS(rect.origin.x - rect.size.width/2);
-                rect.origin.y  = ABS(rect.origin.y - rect.size.height/2);
-                
-                CGFloat percentage = [self getOverlappingPercentage:rect :center];
-                NSLog(@"Percentage Overlay : %f", percentage);
-                
-                if (percentage >= ACCURACY)
-                {
-                    rect = center;
-                }
-                
-                // Smooth new center compared to old center
-                //rect.origin.x = (rect.origin.x + 2 * center.origin.x) / 3;
-                //rect.origin.y = (rect.origin.y + 2 * center.origin.y) / 3;
-                
-                center = rect;
+            if (true)
+            {
+                [self processBasedOnEyes:faceFeature :rect];
+            } else
+            {
+                [self processBasedOnMouth:faceFeature :rect];
             }
+            
         }
     });
+}
+
+- (void) processBasedOnEyes:(CIFaceFeature *) feature : (CGRect)rect
+{
+    if (feature.hasLeftEyePosition && feature.hasRightEyePosition) {
+        rect.origin.x = (feature.leftEyePosition.x + feature.rightEyePosition.x) / 2;
+        rect.origin.y = (feature.leftEyePosition.y + feature.rightEyePosition.y) / 2;
+        
+        rect.origin.x  = ABS(rect.origin.x - rect.size.width/2);
+        rect.origin.y  = ABS(rect.origin.y - rect.size.height/2);
+        
+        CGFloat percentage = [self getOverlappingPercentage:rect :center];
+        NSLog(@"Percentage Overlay : %f", percentage);
+        
+        if (percentage >= ACCURACY)
+        {
+            rect = center;
+        }
+        
+        // Smooth new center compared to old center
+        rect.origin.x = (rect.origin.x + 2 * center.origin.x) / 3;
+        rect.origin.y = (rect.origin.y + 2 * center.origin.y) / 3;
+        
+        center = rect;
+    }
+}
+
+- (void) processBasedOnMouth:(CIFaceFeature *) feature : (CGRect)rect
+{
+    if (feature.hasMouthPosition) {
+        rect.origin.x = feature.mouthPosition.x;
+        rect.origin.y = feature.mouthPosition.y;
+        
+        rect.origin.x  = ABS(rect.origin.x - rect.size.width/2);
+        rect.origin.y  = ABS(rect.origin.y - rect.size.height/2);
+        
+        CGFloat percentage = [self getOverlappingPercentage:rect :center];
+        NSLog(@"Percentage Overlay : %f", percentage);
+        
+        if (percentage >= ACCURACY)
+        {
+            rect = center;
+        }
+        
+        // Smooth new center compared to old center
+        rect.origin.x = (rect.origin.x + 2 * center.origin.x) / 3;
+        rect.origin.y = (rect.origin.y + 2 * center.origin.y) / 3;
+        
+        center = rect;
+    }
 }
 
 -(CGFloat) getOverlappingPercentage:(CGRect)r1 :(CGRect)r2
