@@ -21,15 +21,37 @@
     
     CGRect center;
     
-    UIImage *image;
     UIImage * sticker;
+    
+    UIImage * leftEyeBrow;
+    UIImage * rightEyeBrow;
+    UIImage * leftEye;
+    UIImage * rightEye;
+    UIImage * mouth;
+    
+    CGPoint leftEyePoint;
+    CGPoint rightEyePoint;
+    CGPoint mouthPoint;
 }
 
 @property (nonatomic, weak) IBOutlet UIButton *recordButton;
 
+@property (nonatomic, weak) UIImage *leftEyeBrow;
+@property (nonatomic, weak) UIImage *rightEyeBrow;
+@property (nonatomic, weak) UIImage *leftEye;
+@property (nonatomic, weak) UIImage *rightEye;
+@property (nonatomic, weak) UIImage *mouth;
+
 @end
 
 @implementation ViewController
+
+int MOUTH = 1;
+int FACE_CENTER = 2;
+int LEFT_EYE = 3;
+int RIGHT_EYE = 4;
+int LEFT_EYE_BROW = 5;
+int RIGHT_EYE_BROW = 6;
 
 // hd - like a boss
 static CGFloat targetWidth = 960.0;
@@ -42,8 +64,13 @@ static NSUInteger videoDurationInSec = 240; // 4min+
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    sticker = [UIImage imageNamed:@"sprite_cool_01.png"];
-    image = [UIImage imageWithCGImage:sticker.CGImage scale:1.0 orientation:UIImageOrientationLeft];
+    sticker = [UIImage imageWithCGImage:[UIImage imageNamed:@"sprite_cool_01.png"].CGImage scale:1.0 orientation:UIImageOrientationLeft];
+    
+    leftEyeBrow = [UIImage imageWithCGImage:[UIImage imageNamed:@"brow_01.png"].CGImage scale:1.0 orientation:UIImageOrientationLeft];
+    rightEyeBrow = [UIImage imageWithCGImage:[UIImage imageNamed:@"brow_02.png"].CGImage scale:1.0 orientation:UIImageOrientationLeft];
+    leftEye = [UIImage imageWithCGImage:[UIImage imageNamed:@"eye_01.png"].CGImage scale:1.0 orientation:UIImageOrientationLeft];
+    rightEye = [UIImage imageWithCGImage:[UIImage imageNamed:@"eye_02.png"].CGImage scale:1.0 orientation:UIImageOrientationLeft];
+    mouth = [UIImage imageWithCGImage:[UIImage imageNamed:@"mouth_01.png"].CGImage scale:1.0 orientation:UIImageOrientationLeft];
     
     center = CGRectZero;
     
@@ -109,19 +136,26 @@ static NSUInteger videoDurationInSec = 240; // 4min+
     frameDrawer = [[AVFrameDrawer alloc] initWithSize:CGSizeMake(targetWidth, targetHeight)
                                contextInitailizeBlock:contextInitialization];
     
+    __weak ViewController *weakSelf = self;
+    
     frameDrawer.contextUpdateBlock = ^BOOL(CGContextRef context, CGSize size, CMTime time) {
         
         CGContextClearRect(context, CGRectMake(0, 0, size.width, size.height));
-        float imageSize = MIN(center.size.width, center.size.height);
-                
-        UIGraphicsBeginImageContext(image.size);
-        UIGraphicsPushContext(context);
         
-        [image drawInRect:CGRectMake(center.origin.x + 150, center.origin.y, imageSize, imageSize)];
-        
-        UIGraphicsPopContext();
-        UIGraphicsEndImageContext();
+//        UIImage * leftEyeBrow;
+//        UIImage * rightEyeBrow;
+//        UIImage * leftEye;
+//        UIImage * rightEye;
+//        UIImage * mouth;
 
+        [weakSelf render:context : LEFT_EYE_BROW];
+        [weakSelf render:context :RIGHT_EYE_BROW];
+        [weakSelf render:context :RIGHT_EYE];
+        [weakSelf render:context :LEFT_EYE];
+        [weakSelf render:context :MOUTH];
+        
+        
+        
         return YES;
     };
     
@@ -129,6 +163,68 @@ static NSUInteger videoDurationInSec = 240; // 4min+
     [painter setOverlay:frameDrawer];
     [painter startCameraCapture];
 }
+
+- (void) render: (CGContextRef) context : (int) position
+{
+    
+    
+//    int MOUTH = 1;
+//    int FACE_CENTER = 2;
+//    int LEFT_EYE = 3;
+//    int RIGHT_EYE = 4;
+//    int LEFT_EYE_BROW = 5;
+//    int RIGHT_EYE_BROW = 6;
+    
+    switch (position) {
+        case  1:
+            UIGraphicsBeginImageContext(mouth.size);
+            UIGraphicsPushContext(context);
+            [mouth drawInRect:CGRectMake(mouthPoint.x - mouth.size.width, mouthPoint.y - mouth.size.height, mouth.size.width, mouth.size.height)];
+            UIGraphicsPopContext();
+            UIGraphicsEndImageContext();
+            break;
+            
+        case  2:
+            break;
+            
+        case  3:
+            UIGraphicsBeginImageContext(leftEye.size);
+            UIGraphicsPushContext(context);
+            [leftEye drawInRect:CGRectMake(leftEyePoint.x - leftEye.size.width/2, leftEyePoint.y - leftEye.size.height/2, leftEye.size.width, leftEye.size.height)];
+            UIGraphicsPopContext();
+            UIGraphicsEndImageContext();
+            break;
+        
+        case  4:
+            UIGraphicsBeginImageContext(rightEye.size);
+            UIGraphicsPushContext(context);
+            [rightEye drawInRect:CGRectMake(rightEyePoint.x - rightEye.size.width/2, rightEyePoint.y - rightEye.size.height/2, rightEye.size.width, rightEye.size.height)];
+            UIGraphicsPopContext();
+            UIGraphicsEndImageContext();
+            break;
+            
+        case  5:
+            UIGraphicsBeginImageContext(leftEyeBrow.size);
+            UIGraphicsPushContext(context);
+            [leftEyeBrow drawInRect:CGRectMake(leftEyePoint.x - leftEyeBrow.size.width, leftEyePoint.y - leftEyeBrow.size.height/2, leftEyeBrow.size.width, leftEyeBrow.size.height)];
+            UIGraphicsPopContext();
+            UIGraphicsEndImageContext();
+            break;
+            
+        case  6:
+            UIGraphicsBeginImageContext(rightEyeBrow.size);
+            UIGraphicsPushContext(context);
+            [rightEyeBrow drawInRect:CGRectMake(rightEyePoint.x - rightEyeBrow.size.width, rightEyePoint.y - rightEyeBrow.size.height/2, rightEyeBrow.size.width, rightEyeBrow.size.height)];
+            UIGraphicsPopContext();
+            UIGraphicsEndImageContext();
+            break;
+            
+            
+        default:
+            break;
+    }
+}
+
 
 #pragma mark -
 #pragma mark - Handler camera capture
@@ -212,17 +308,11 @@ static NSUInteger videoDurationInSec = 240; // 4min+
         
         if ([featureArray count] > 0) {
             
-            CIFaceFeature *faceFeature = featureArray[0];
-            CGRect rect = [faceFeature bounds];
+            CIFaceFeature *feature = featureArray[0];
+            [self logFacialFeatureCoordinates:feature];
             
-            if (true)
-            {
-                [self processBasedOnEyes:faceFeature :rect];
-            } else
-            {
-                [self processBasedOnMouth:faceFeature :rect];
-            }
             
+            [self processBasedOnEyes:feature :[feature bounds]];
         }
     });
 }
@@ -261,7 +351,7 @@ static NSUInteger videoDurationInSec = 240; // 4min+
         rect.origin.x  = ABS(rect.origin.x - rect.size.width/2);
         rect.origin.y  = ABS(rect.origin.y - rect.size.height/2);
         
-        CGFloat percentage = [self getOverlappingPercentage:rect :center];
+        CGFloat percentage = [self getOverlappingPercentage: rect :center];
         NSLog(@"Percentage Overlay : %f", percentage);
         
         if (percentage >= ACCURACY)
@@ -291,16 +381,19 @@ static NSUInteger videoDurationInSec = 240; // 4min+
     
     if(f.hasLeftEyePosition)
     {
+        leftEyePoint = f.leftEyePosition;
         NSLog(@"left eye position x = %f , y = %f", f.leftEyePosition.x, f.leftEyePosition.y);
     }
     
     if(f.hasRightEyePosition)
     {
+        rightEyePoint = f.rightEyePosition;
         NSLog(@"right eye position x = %f , y = %f", f.rightEyePosition.x, f.rightEyePosition.y);
     }
     
     if(f.hasMouthPosition)
     {
+        mouthPoint = f.mouthPosition;
         NSLog(@"mouth position x = %f , y = %f", f.mouthPosition.x, f.mouthPosition.y);
     }
 }
